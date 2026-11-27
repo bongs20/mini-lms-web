@@ -3,6 +3,8 @@ import { isBlobStorageConfigured } from "@/lib/blob";
 import { getAuthUser, getStore } from "@/lib/store";
 import { listStoredSubmissions } from "@/lib/submissions";
 import {
+  listDeletedAssignmentIds,
+  listDeletedCourseIds,
   listStoredAssignments,
   listStoredCourses,
   mergeCatalogRecords,
@@ -37,12 +39,26 @@ export async function GET(
   const store = getStore();
 
   try {
-  const [storedCourses, storedAssignments, submissions] =
+  const [
+    storedCourses,
+    storedAssignments,
+    submissions,
+    deletedCourseIds,
+    deletedAssignmentIds,
+  ] =
     await Promise.all([
       listStoredCourses(),
       listStoredAssignments(),
       listStoredSubmissions(),
+      listDeletedCourseIds(),
+      listDeletedAssignmentIds(),
     ]);
+  if (deletedCourseIds.has(courseId)) {
+    return NextResponse.json(
+      { success: false, error: { message: "Mata kuliah tidak ditemukan." } },
+      { status: 404 }
+    );
+  }
   const course = mergeCatalogRecords(store.courses, storedCourses).find(
     (item) => item.id === courseId
   );
@@ -57,7 +73,10 @@ export async function GET(
     store.assignments,
     storedAssignments
   )
-    .filter((a) => a.course_id === courseId)
+    .filter(
+      (a) =>
+        a.course_id === courseId && !deletedAssignmentIds.has(a.id)
+    )
     .map((a) => ({
       ...a,
       submissions: submissions.filter(

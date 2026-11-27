@@ -1,6 +1,7 @@
 import { get } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { isBlobStorageConfigured } from "@/lib/blob";
+import { isAssignmentDeleted } from "@/lib/catalog";
 import { getAuthUser } from "@/lib/store";
 import { getStoredSubmission } from "@/lib/submissions";
 
@@ -39,6 +40,12 @@ export async function GET(
   try {
     const submission = await getStoredSubmission(submissionId);
     if (!submission) {
+      return NextResponse.json(
+        { success: false, error: { message: "Pengumpulan tidak ditemukan." } },
+        { status: 404 }
+      );
+    }
+    if (await isAssignmentDeleted(submission.assignment_id)) {
       return NextResponse.json(
         { success: false, error: { message: "Pengumpulan tidak ditemukan." } },
         { status: 404 }

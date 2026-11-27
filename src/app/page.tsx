@@ -13,6 +13,7 @@ import {
   Send,
   AlertCircle,
   GraduationCap,
+  Trash2,
 } from "lucide-react";
 import {
   apiFetch,
@@ -76,6 +77,7 @@ export default function HomePage() {
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
   const isInstructor = user?.role === "dosen" || user?.role === "admin";
   const isAdmin = user?.role === "admin";
@@ -240,6 +242,111 @@ export default function HomePage() {
         err instanceof Error ? err.message : "Gagal menambah mata kuliah.",
         "error"
       );
+    }
+  };
+
+  const handleDeleteCourse = async (course: Course) => {
+    const confirmed = window.confirm(
+      `Hapus mata kuliah "${course.name}" beserta semua tugas, pengumpulan, dan berkasnya secara permanen?`
+    );
+    if (!confirmed) return;
+
+    setDeletingItemId(`course:${course.id}`);
+    try {
+      const result = await apiFetch<{
+        deleted_assignments: number;
+        deleted_submissions: number;
+      }>(`/api/courses?id=${encodeURIComponent(course.id)}`, {
+        method: "DELETE",
+      });
+      if (selectedCourseId === course.id) {
+        setSelectedCourseId("");
+        setAssignments([]);
+        setSubmissions([]);
+        setAssignmentForm((current) =>
+          current.course_id === course.id
+            ? { ...current, course_id: "" }
+            : current
+        );
+        setSubmissionForm({
+          assignment_id: "",
+          file_name: "",
+          file_path: "",
+        });
+        setSelectedFile(null);
+      }
+      if (user) await loadWorkspaceData(user);
+      showNotice(
+        `Mata kuliah dihapus beserta ${result.deleted_assignments} tugas dan ${result.deleted_submissions} pengumpulan.`,
+        "success"
+      );
+    } catch (err: unknown) {
+      showNotice(
+        err instanceof Error ? err.message : "Gagal menghapus mata kuliah.",
+        "error"
+      );
+    } finally {
+      setDeletingItemId(null);
+    }
+  };
+
+  const handleDeleteAssignment = async (assignment: Assignment) => {
+    const confirmed = window.confirm(
+      `Hapus tugas "${assignment.title}" beserta semua pengumpulan dan berkasnya secara permanen?`
+    );
+    if (!confirmed) return;
+
+    setDeletingItemId(`assignment:${assignment.id}`);
+    try {
+      const result = await apiFetch<{ deleted_submissions: number }>(
+        `/api/assignments?id=${encodeURIComponent(assignment.id)}`,
+        { method: "DELETE" }
+      );
+      setSubmissionForm((current) =>
+        current.assignment_id === assignment.id
+          ? { assignment_id: "", file_name: "", file_path: "" }
+          : current
+      );
+      if (submissionForm.assignment_id === assignment.id) {
+        setSelectedFile(null);
+      }
+      if (selectedCourseId) await loadCourseDetails(selectedCourseId);
+      showNotice(
+        `Tugas dihapus beserta ${result.deleted_submissions} pengumpulan.`,
+        "success"
+      );
+    } catch (err: unknown) {
+      showNotice(
+        err instanceof Error ? err.message : "Gagal menghapus tugas.",
+        "error"
+      );
+    } finally {
+      setDeletingItemId(null);
+    }
+  };
+
+  const handleDeleteSubmission = async (submission: Submission) => {
+    const confirmed = window.confirm(
+      `Hapus pengumpulan "${submission.file_name}" dari ${submission.user_name || submission.user_id}?`
+    );
+    if (!confirmed) return;
+
+    setDeletingItemId(`submission:${submission.id}`);
+    try {
+      await apiFetch(`/api/submissions?id=${encodeURIComponent(submission.id)}`, {
+        method: "DELETE",
+      });
+      setSubmissions((current) =>
+        current.filter((item) => item.id !== submission.id)
+      );
+      showNotice("Pengumpulan berhasil dihapus.", "success");
+    } catch (err: unknown) {
+      showNotice(
+        err instanceof Error ? err.message : "Gagal menghapus pengumpulan.",
+        "error"
+      );
+    } finally {
+      setDeletingItemId(null);
     }
   };
 
@@ -718,15 +825,29 @@ export default function HomePage() {
                             {course.description || "Belum ada deskripsi."}
                           </p>
                         </div>
-                        <button
-                          onClick={() => {
-                            setSelectedCourseId(course.id);
-                            setActiveTab("assignments");
-                          }}
-                          className="mt-4 text-sm font-semibold text-indigo-600 hover:text-indigo-700 text-left cursor-pointer"
-                        >
-                          Lihat tugas →
-                        </button>
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                          <button
+                            onClick={() => {
+                              setSelectedCourseId(course.id);
+                              setActiveTab("assignments");
+                            }}
+                            className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 text-left cursor-pointer"
+                          >
+                            Lihat tugas →
+                          </button>
+                          {isInstructor && (
+                            <button
+                              type="button"
+                              disabled={deletingItemId === `course:${course.id}`}
+                              onClick={() => handleDeleteCourse(course)}
+                              title="Hapus mata kuliah beserta seluruh isinya"
+                              aria-label={`Hapus mata kuliah ${course.name}`}
+                              className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50 cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -870,9 +991,23 @@ export default function HomePage() {
                                     : "Belum dikumpulkan"}
                                 </span>
                               ) : (
-                                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700">
-                                  {asgSubmissions.length} pengumpulan
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700">
+                                    {asgSubmissions.length} pengumpulan
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      deletingItemId === `assignment:${a.id}`
+                                    }
+                                    onClick={() => handleDeleteAssignment(a)}
+                                    title="Hapus tugas beserta semua pengumpulan"
+                                    aria-label={`Hapus tugas ${a.title}`}
+                                    className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -897,13 +1032,32 @@ export default function HomePage() {
                                     {isInstructor &&
                                       ` · ${s.user_name || s.user_id}`}
                                   </span>
-                                  {s.submitted_at && (
-                                    <span className="text-slate-400 shrink-0 ml-2">
-                                      {new Date(s.submitted_at).toLocaleString(
-                                        "id-ID"
-                                      )}
-                                    </span>
-                                  )}
+                                  <span className="shrink-0 ml-2 flex items-center gap-2">
+                                    {s.submitted_at && (
+                                      <span className="text-slate-400">
+                                        {new Date(
+                                          s.submitted_at
+                                        ).toLocaleString("id-ID")}
+                                      </span>
+                                    )}
+                                    {isInstructor && (
+                                      <button
+                                        type="button"
+                                        disabled={
+                                          deletingItemId ===
+                                          `submission:${s.id}`
+                                        }
+                                        onClick={() =>
+                                          handleDeleteSubmission(s)
+                                        }
+                                        title="Hapus pengumpulan ini"
+                                        aria-label={`Hapus pengumpulan dari ${s.user_name || s.user_id}`}
+                                        className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 disabled:opacity-50 cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </span>
                                 </div>
                               ))}
                             </div>

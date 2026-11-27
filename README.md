@@ -4,8 +4,8 @@ Aplikasi **Mini LMS** berbasis **Next.js (App Router)** yang berjalan secara **f
 
 ## Fitur Utama
 - **Autentikasi & Role (`mahasiswa`, `dosen`, `admin`)**: Akun registrasi disimpan privat di Vercel Blob, dengan sesi berbasis token HMAC-SHA256 (`/api/auth/*`).
-- **Manajemen Mata Kuliah**: Lihat daftar mata kuliah & tambah mata kuliah oleh dosen/admin (`/api/courses`).
-- **Tugas & Pengumpulan**: Simpan kelas, tugas, berkas, dan rekaman pengumpulan secara persisten di Vercel Blob (`/api/courses`, `/api/assignments`, `/api/submissions`).
+- **Manajemen Mata Kuliah**: Dosen/admin dapat menambah dan menghapus mata kuliah (`/api/courses`); penghapusan kelas juga menghapus tugas, pengumpulan, dan berkas terkait.
+- **Tugas & Pengumpulan**: Simpan kelas, tugas, berkas, dan rekaman pengumpulan secara persisten di Vercel Blob. Dosen/admin dapat menghapus tugas atau pengumpulan (`/api/assignments`, `/api/submissions`).
 - **Notifikasi & Monitoring**: Notifikasi otomatis saat registrasi/pengumpulan tugas (`/api/notifications`) dan status layanan bawaan (`/api/monitoring/services`).
 
 ## Akun Demo Bawaan

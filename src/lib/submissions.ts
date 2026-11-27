@@ -58,7 +58,7 @@ async function readStoredSubmission(pathname: string): Promise<StoredSubmission>
   return value;
 }
 
-export async function listStoredSubmissions(): Promise<Submission[]> {
+async function listStoredSubmissionRecords(): Promise<StoredSubmission[]> {
   const blobs: { pathname: string }[] = [];
   let cursor: string | undefined;
 
@@ -71,15 +71,26 @@ export async function listStoredSubmissions(): Promise<Submission[]> {
     cursor = page.hasMore ? page.cursor : undefined;
   } while (cursor);
 
-  const submissions = await Promise.all(
+  return Promise.all(
     blobs.map(async (blob) =>
-      toSubmission(await readStoredSubmission(blob.pathname))
+      readStoredSubmission(blob.pathname)
     )
   );
+}
+
+export async function listStoredSubmissions(): Promise<Submission[]> {
+  const records = await listStoredSubmissionRecords();
+  const submissions = records.map(toSubmission);
 
   return submissions.sort((a, b) =>
     (b.submitted_at || "").localeCompare(a.submitted_at || "")
   );
+}
+
+async function deleteBlobPaths(paths: string[]): Promise<void> {
+  for (let index = 0; index < paths.length; index += 500) {
+    await del(paths.slice(index, index + 500));
+  }
 }
 
 export async function getStoredSubmission(
@@ -97,6 +108,34 @@ export async function getStoredSubmission(
     throw new Error(`Format rekaman pengumpulan tidak valid: ${pathname}`);
   }
   return value;
+}
+
+export async function deleteStoredSubmission(
+  submissionId: string
+): Promise<boolean> {
+  const submission = await getStoredSubmission(submissionId);
+  if (!submission) return false;
+  await deleteBlobPaths([
+    `${SUBMISSION_PREFIX}${submissionId}.json`,
+    submission.file_blob_path,
+  ]);
+  return true;
+}
+
+export async function deleteStoredSubmissionsForAssignments(
+  assignmentIds: string[]
+): Promise<number> {
+  if (assignmentIds.length === 0) return 0;
+  const assignmentIdSet = new Set(assignmentIds);
+  const submissions = (await listStoredSubmissionRecords()).filter((item) =>
+    assignmentIdSet.has(item.assignment_id)
+  );
+  const paths = submissions.flatMap((submission) => [
+    `${SUBMISSION_PREFIX}${submission.id}.json`,
+    submission.file_blob_path,
+  ]);
+  await deleteBlobPaths(paths);
+  return submissions.length;
 }
 
 export async function createStoredSubmission(input: {

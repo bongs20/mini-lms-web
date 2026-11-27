@@ -57,8 +57,8 @@ Aplikasi menyediakan akun demo bawaan serta fitur registrasi langsung melalui ta
   ├── UI (App Router, Tailwind CSS, Lucide Icons)
   └── Next.js API Route Handlers (/api/*)
         ├── /api/auth/*          ──▶ Login, Register, Me (HMAC-SHA256 Token)
-        ├── /api/courses         ──▶ Manajemen Mata Kuliah di Vercel Blob
-        ├── /api/assignments     ──▶ Manajemen Tugas di Vercel Blob
+        ├── /api/courses         ──▶ Manajemen & penghapusan kelas di Vercel Blob
+        ├── /api/assignments     ──▶ Manajemen & penghapusan tugas di Vercel Blob
         ├── /api/course-summary  ──▶ Ringkasan Kelas & Tugas
         ├── /api/submissions     ──▶ Simpan berkas privat + metadata ke Vercel Blob
         ├── /api/submissions/[id]/file ──▶ Unduh berkas dengan autentikasi
@@ -76,6 +76,7 @@ Aplikasi menyediakan akun demo bawaan serta fitur registrasi langsung melalui ta
 3. **Pengumpulan Berkas (`src/app/api/submissions/route.ts`)**:
    - Menerima berkas dan `assignment_id` dalam satu request, lalu menyimpan berkas dan rekaman metadata terpisah di private Vercel Blob. Setiap pengumpulan memiliki rekaman unik sehingga cold start dan instance serverless berbeda tidak menghapus atau menimpa data satu sama lain.
    - Dosen/admin melihat nama pengumpul, nama berkas, waktu, dan dapat mengunduh berkas melalui route yang memeriksa autentikasi.
+   - Dosen/admin dapat menghapus pengumpulan atau tugas. Penghapusan tugas menghapus semua pengumpulan dan berkasnya; penghapusan mata kuliah menghapus seluruh tugas dan pengumpulan terkait. Konfirmasi UI menjelaskan cakupan penghapusan dan penanda penghapusan mencegah data seed muncul kembali setelah cold start.
 
 > **Catatan konfigurasi:** Hubungkan private Blob store ke project Vercel untuk setiap environment yang digunakan. Aplikasi memakai OIDC Vercel atau `BLOB_READ_WRITE_TOKEN` lokal. Registrasi, kursus, tugas, dan pengumpulan memerlukan Blob; jika belum tersedia, perubahan ditolak dengan error yang jelas. Upload melalui route server dibatasi 4 MB. Akun yang sebelumnya hanya tersimpan di memori serverless dan berkas lama di `/tmp` tidak dapat dipulihkan otomatis.
 
