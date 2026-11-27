@@ -24,7 +24,16 @@ export async function GET(
     );
   }
 
-  const assignments = store.assignments.filter((a) => a.course_id === courseId);
+  const assignments = store.assignments
+    .filter((a) => a.course_id === courseId)
+    .map((a) => ({
+      ...a,
+      submissions: store.submissions.filter(
+        (s) =>
+          s.assignment_id === a.id &&
+          (user.role === "dosen" || user.role === "admin" || s.user_id === user.id)
+      ),
+    }));
   return NextResponse.json({
     success: true,
     data: { course, assignments },

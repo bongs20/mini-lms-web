@@ -16,17 +16,18 @@ export async function POST(request: Request) {
       assignment_id?: string;
       file_name?: string;
       file_path?: string;
+      file_url?: string;
     };
 
     const assignmentId = body.assignment_id?.trim();
     const fileName = body.file_name?.trim();
-    const filePath = body.file_path?.trim();
+    const filePath = (body.file_path || body.file_url)?.trim();
 
     if (!assignmentId || !fileName || !filePath) {
       return NextResponse.json(
         {
           success: false,
-          error: { message: "assignment_id, file_name, dan file_path wajib diisi." },
+          error: { message: "assignment_id, file_name, dan file_path/file_url wajib diisi." },
         },
         { status: 400 }
       );

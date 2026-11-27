@@ -810,7 +810,13 @@ export default function HomePage() {
                             <div className="flex flex-col items-end gap-1.5 shrink-0">
                               {a.due_date && (
                                 <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">
-                                  Batas: {a.due_date}
+                                  Batas:{" "}
+                                  {Number.isNaN(Date.parse(a.due_date))
+                                    ? a.due_date
+                                    : new Date(a.due_date).toLocaleString("id-ID", {
+                                        dateStyle: "medium",
+                                        timeStyle: "short",
+                                      })}
                                 </span>
                               )}
                               {!isInstructor ? (
