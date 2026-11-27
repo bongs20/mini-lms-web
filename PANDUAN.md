@@ -57,11 +57,11 @@ Aplikasi menyediakan akun demo bawaan serta fitur registrasi langsung melalui ta
   ├── UI (App Router, Tailwind CSS, Lucide Icons)
   └── Next.js API Route Handlers (/api/*)
         ├── /api/auth/*          ──▶ Login, Register, Me (HMAC-SHA256 Token)
-        ├── /api/courses         ──▶ Manajemen Mata Kuliah
-        ├── /api/assignments     ──▶ Manajemen Tugas
+        ├── /api/courses         ──▶ Manajemen Mata Kuliah di Vercel Blob
+        ├── /api/assignments     ──▶ Manajemen Tugas di Vercel Blob
         ├── /api/course-summary  ──▶ Ringkasan Kelas & Tugas
-        ├── /api/upload          ──▶ Simpan berkas sementara ke /tmp
-        ├── /api/submissions     ──▶ Catat pengumpulan & buat notifikasi
+        ├── /api/submissions     ──▶ Simpan berkas privat + metadata ke Vercel Blob
+        ├── /api/submissions/[id]/file ──▶ Unduh berkas dengan autentikasi
         ├── /api/notifications   ──▶ Baca & tandai notifikasi
         └── /api/monitoring      ──▶ Status kesehatan layanan bawaan
 ```
@@ -70,13 +70,14 @@ Aplikasi menyediakan akun demo bawaan serta fitur registrasi langsung melalui ta
 1. **Frontend (`src/app/page.tsx`)**:
    - Dibangun dengan **Next.js (App Router)**, **TypeScript**, dan **Tailwind CSS**.
    - Menyimpan token di `localStorage` (`mini-lms-token`) dan mengirimkannya pada header `Authorization: Bearer <token>` di setiap request (`src/lib/api.ts`).
-2. **In-Memory Store & Auth (`src/lib/store.ts`)**:
-   - Menyimpan data runtime pada `globalThis` dengan data awal (*seed*) otomatis saat aplikasi dimulai.
-   - Menggunakan token bertanda tangan **HMAC-SHA256** (`AUTH_SECRET`) yang bersifat *stateless*, sehingga sesi login tetap valid di lingkungan serverless Vercel.
-3. **Upload Berkas (`src/app/api/upload/route.ts`)**:
-   - Menerima `FormData` (`file` dan `assignment_id`), melakukan sanitasi nama berkas, menyimpan berkas sementara di `/tmp/mini-lms-uploads/` (kompatibel dengan Vercel Serverless), lalu mengembalikan `file_name` dan `file_path` untuk dikirim ke `POST /api/submissions`.
+2. **Store & Auth (`src/lib/store.ts`)**:
+   - Akun demo tersedia sebagai seed lokal. Akun hasil registrasi dan hash password disimpan sebagai rekaman privat di Vercel Blob dengan kunci username yang di-hash, sehingga login tetap bekerja lintas cold start dan instance.
+   - Kursus dan tugas baru juga disimpan per rekaman di private Vercel Blob. Token login tetap bertanda tangan **HMAC-SHA256** (`AUTH_SECRET`) dan bersifat *stateless*.
+3. **Pengumpulan Berkas (`src/app/api/submissions/route.ts`)**:
+   - Menerima berkas dan `assignment_id` dalam satu request, lalu menyimpan berkas dan rekaman metadata terpisah di private Vercel Blob. Setiap pengumpulan memiliki rekaman unik sehingga cold start dan instance serverless berbeda tidak menghapus atau menimpa data satu sama lain.
+   - Dosen/admin melihat nama pengumpul, nama berkas, waktu, dan dapat mengunduh berkas melalui route yang memeriksa autentikasi.
 
-> **Catatan Serverless:** Karena penyimpanan data menggunakan in-memory store (`globalThis`) dan berkas disimpan di `/tmp`, data baru yang dibuat saat runtime bersifat sementara dan akan kembali ke data awal (*seed*) jika serverless function mengalami *cold start*.
+> **Catatan konfigurasi:** Hubungkan private Blob store ke project Vercel untuk setiap environment yang digunakan. Aplikasi memakai OIDC Vercel atau `BLOB_READ_WRITE_TOKEN` lokal. Registrasi, kursus, tugas, dan pengumpulan memerlukan Blob; jika belum tersedia, perubahan ditolak dengan error yang jelas. Upload melalui route server dibatasi 4 MB. Akun yang sebelumnya hanya tersimpan di memori serverless dan berkas lama di `/tmp` tidak dapat dipulihkan otomatis.
 
 ---
 
@@ -92,5 +93,6 @@ Aplikasi berjalan di `http://localhost:3000`.
 ### Deploy ke Vercel
 1. Push repository ini ke GitHub/GitLab/Bitbucket.
 2. Import project di Vercel (Root Directory mengarah ke folder project ini).
-3. *(Opsional)* Tambahkan Environment Variable `AUTH_SECRET` dengan string acak di Vercel Project Settings.
-4. Klik **Deploy**. Tidak diperlukan `API_GATEWAY_URL` atau server backend terpisah.
+3. Hubungkan private Vercel Blob store ke project, termasuk environment Development, Preview, dan Production (`BLOB_STORE_ID` dan OIDC dikelola Vercel).
+4. *(Opsional)* Tambahkan Environment Variable `AUTH_SECRET` dengan string acak di Vercel Project Settings.
+5. Klik **Deploy**. Tidak diperlukan `API_GATEWAY_URL` atau server backend terpisah.

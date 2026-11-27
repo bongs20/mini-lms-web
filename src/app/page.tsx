@@ -142,7 +142,7 @@ export default function HomePage() {
         return;
       }
       try {
-        const [asgRes, sumRes] = await Promise.allSettled([
+        const [asgRes, sumRes] = await Promise.all([
           apiFetch<{ assignments?: Assignment[] }>(
             `/api/assignments?course_id=${encodeURIComponent(courseId)}`
           ),
@@ -150,19 +150,15 @@ export default function HomePage() {
             assignments?: Array<Assignment & { submissions?: Submission[] }>;
           }>(`/api/course-summary/${encodeURIComponent(courseId)}`),
         ]);
-        if (asgRes.status === "fulfilled") {
-          setAssignments(asgRes.value.assignments || []);
-        }
-        if (sumRes.status === "fulfilled") {
-          const allSubs: Submission[] = (sumRes.value.assignments || []).flatMap(
-            (asg) =>
-              (asg.submissions || []).map((sub) => ({
-                ...sub,
-                assignment_id: sub.assignment_id || asg.id,
-              }))
-          );
-          setSubmissions(allSubs);
-        }
+        setAssignments(asgRes.assignments || []);
+        const allSubs: Submission[] = (sumRes.assignments || []).flatMap(
+          (asg) =>
+            (asg.submissions || []).map((sub) => ({
+              ...sub,
+              assignment_id: sub.assignment_id || asg.id,
+            }))
+        );
+        setSubmissions(allSubs);
       } catch (err: unknown) {
         showNotice(
           err instanceof Error ? err.message : "Gagal memuat tugas.",
@@ -283,38 +279,23 @@ export default function HomePage() {
     }
     setIsSubmitting(true);
     try {
-      // 1. Upload file fisik ke Next.js API Route (/api/upload)
       const formData = new FormData();
       formData.append("file", selectedFile);
       formData.append("assignment_id", submissionForm.assignment_id);
 
-      const uploadRes = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const uploadJson = await uploadRes.json();
-      if (!uploadRes.ok || !uploadJson.success) {
-        throw new Error(
-          uploadJson.error?.message || "Gagal mengunggah berkas."
-        );
-      }
-
-      // 2. Kirim metadata ke backend (/api/submissions)
       const subRes = await apiFetch<{ submission?: Submission }>(
         "/api/submissions",
         {
           method: "POST",
-          body: {
-            assignment_id: submissionForm.assignment_id,
-            file_name: uploadJson.data.file_name,
-            file_url: uploadJson.data.file_path,
-          },
+          body: formData,
         }
       );
 
-      if (subRes.submission) {
-        setSubmissions((prev) => [...prev, subRes.submission!]);
+      const submission = subRes.submission;
+      if (!submission) {
+        throw new Error("Server tidak mengembalikan rekaman pengumpulan.");
       }
+      setSubmissions((prev) => [...prev, submission]);
 
       setSubmissionForm({ assignment_id: "", file_name: "", file_path: "" });
       setSelectedFile(null);
@@ -326,6 +307,50 @@ export default function HomePage() {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDownloadSubmission = async (
+    event: React.MouseEvent<HTMLAnchorElement>,
+    submission: Submission
+  ) => {
+    event.preventDefault();
+    const token = getToken();
+    if (!token) {
+      showNotice("Silakan masuk kembali untuk mengunduh berkas.", "error");
+      return;
+    }
+
+    try {
+      const response = await fetch(submission.file_path, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        let message = `Gagal mengunduh berkas (${response.status}).`;
+        try {
+          const payload = (await response.json()) as {
+            error?: { message?: string };
+          };
+          message = payload.error?.message || message;
+        } catch {
+          // Use the status-based message when the server response isn't JSON.
+        }
+        throw new Error(message);
+      }
+
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = submission.file_name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (err: unknown) {
+      showNotice(
+        err instanceof Error ? err.message : "Gagal mengunduh berkas.",
+        "error"
+      );
     }
   };
 
@@ -602,7 +627,12 @@ export default function HomePage() {
               </p>
             </div>
             <button
-              onClick={() => loadWorkspaceData(user)}
+              onClick={async () => {
+                await loadWorkspaceData(user);
+                if (selectedCourseId) {
+                  await loadCourseDetails(selectedCourseId);
+                }
+              }}
               disabled={refreshing}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-sm font-medium text-slate-700 shadow-sm transition-colors cursor-pointer self-start"
             >
@@ -855,8 +885,17 @@ export default function HomePage() {
                                   className="text-xs text-slate-600 flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg"
                                 >
                                   <span className="font-medium text-slate-800 truncate">
-                                    📎 {s.file_name}
-                                    {isInstructor && ` · ${s.user_id}`}
+                                    <a
+                                      href={s.file_path}
+                                      onClick={(event) =>
+                                        handleDownloadSubmission(event, s)
+                                      }
+                                      className="text-indigo-700 hover:underline"
+                                    >
+                                      📎 {s.file_name}
+                                    </a>
+                                    {isInstructor &&
+                                      ` · ${s.user_name || s.user_id}`}
                                   </span>
                                   {s.submitted_at && (
                                     <span className="text-slate-400 shrink-0 ml-2">
@@ -980,13 +1019,11 @@ export default function HomePage() {
                         onChange={(e) => {
                           const file = e.target.files?.[0] || null;
                           setSelectedFile(file);
-                          if (file) {
-                            setSubmissionForm((prev) => ({
-                              ...prev,
-                              file_name: file.name,
-                              file_path: `/uploads/${prev.assignment_id || "tugas"}/${file.name}`,
-                            }));
-                          }
+                          setSubmissionForm((prev) => ({
+                            ...prev,
+                            file_name: file?.name || "",
+                            file_path: "",
+                          }));
                         }}
                       />
                       {selectedFile ? (
