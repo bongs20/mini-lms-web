@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RuangKelas — Mini LMS (Fullstack Next.js)
 
-## Getting Started
+Aplikasi **Mini LMS** berbasis **Next.js (App Router)** yang berjalan secara **fullstack standalone** (Frontend + API Routes dalam satu aplikasi) sehingga dapat langsung di-deploy ke **Vercel** tanpa server backend eksternal.
 
-First, run the development server:
+## Fitur Utama
+- **Autentikasi & Role (`mahasiswa`, `dosen`, `admin`)**: Registrasi, login, dan sesi berbasis token HMAC-SHA256 stateless (`/api/auth/*`).
+- **Manajemen Mata Kuliah**: Lihat daftar mata kuliah & tambah mata kuliah oleh dosen/admin (`/api/courses`).
+- **Tugas & Pengumpulan**: Buat tugas, lihat ringkasan mata kuliah, unggah berkas ke `/tmp`, dan catat pengumpulan tugas (`/api/assignments`, `/api/upload`, `/api/submissions`).
+- **Notifikasi & Monitoring**: Notifikasi otomatis saat registrasi/pengumpulan tugas (`/api/notifications`) dan status layanan bawaan (`/api/monitoring/services`).
+
+## Akun Demo Bawaan
+- **Mahasiswa**: `mahasiswa` / `mahasiswa123`
+- **Dosen**: `dosen` / `dosen123`
+- **Admin**: `admin` / `admin123`
+
+## Menjalankan Secara Lokal
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka [http://localhost:3000](http://localhost:3000) di browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy ke Vercel
+1. Push repository ini ke GitHub/GitLab/Bitbucket.
+2. Import project di [Vercel](https://vercel.com/new).
+3. *(Opsional)* Tambahkan Environment Variable `AUTH_SECRET` berisi string acak.
+4. Klik **Deploy**.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Untuk dokumentasi lengkap alur penggunaan dan arsitektur teknis, lihat [PANDUAN.md](./PANDUAN.md).
