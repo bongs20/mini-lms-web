@@ -75,6 +75,7 @@ export default function HomePage() {
     file_path: "",
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isInstructor = user?.role === "dosen" || user?.role === "admin";
   const isAdmin = user?.role === "admin";
@@ -280,6 +281,7 @@ export default function HomePage() {
       showNotice("Pilih berkas terlebih dahulu.", "error");
       return;
     }
+    setIsSubmitting(true);
     try {
       // 1. Upload file fisik ke Next.js API Route (/api/upload)
       const formData = new FormData();
@@ -298,26 +300,32 @@ export default function HomePage() {
       }
 
       // 2. Kirim metadata ke backend (/api/submissions)
-      await apiFetch("/api/submissions", {
-        method: "POST",
-        body: {
-          assignment_id: submissionForm.assignment_id,
-          file_name: uploadJson.data.file_name,
-          file_url: uploadJson.data.file_path,
-        },
-      });
+      const subRes = await apiFetch<{ submission?: Submission }>(
+        "/api/submissions",
+        {
+          method: "POST",
+          body: {
+            assignment_id: submissionForm.assignment_id,
+            file_name: uploadJson.data.file_name,
+            file_url: uploadJson.data.file_path,
+          },
+        }
+      );
+
+      if (subRes.submission) {
+        setSubmissions((prev) => [...prev, subRes.submission!]);
+      }
 
       setSubmissionForm({ assignment_id: "", file_name: "", file_path: "" });
       setSelectedFile(null);
-      if (selectedCourseId) {
-        loadCourseDetails(selectedCourseId);
-      }
       showNotice("Berkas berhasil diunggah dan tugas dikumpulkan.", "success");
     } catch (err: unknown) {
       showNotice(
         err instanceof Error ? err.message : "Gagal mengumpulkan tugas.",
         "error"
       );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1003,10 +1011,17 @@ export default function HomePage() {
                     </label>
                     <button
                       type="submit"
-                      disabled={!selectedFile}
-                      className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white text-sm font-semibold transition-colors cursor-pointer"
+                      disabled={!selectedFile || isSubmitting}
+                      className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white text-sm font-semibold transition-colors cursor-pointer flex items-center justify-center gap-2"
                     >
-                      Kirim pengumpulan
+                      {isSubmitting ? (
+                        <>
+                          <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                          Mengunggah &amp; mengirim...
+                        </>
+                      ) : (
+                        "Kirim pengumpulan"
+                      )}
                     </button>
                   </form>
                 </div>
