@@ -1,49 +1,87 @@
 import { NextResponse } from "next/server";
 import type { Role } from "@/lib/api";
 import { createUserRecord, getStore, sanitizeUser } from "@/lib/store";
+import { isBlobStorageConfigured } from "@/lib/blob";
+import { saveStoredUser } from "@/lib/users";
 
 export async function POST(request: Request) {
+  let input: Record<string, unknown>;
   try {
-    const body = (await request.json()) as {
-      name?: string;
-      username?: string;
-      password?: string;
-      role?: Role;
-    };
-    const username = body.username?.trim();
-    const password = body.password || "";
-    const role: Role =
-      body.role === "dosen" || body.role === "admin" ? body.role : "mahasiswa";
-
-    if (!username || !password) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { message: "Username dan password wajib diisi." },
-        },
-        { status: 400 }
-      );
+    const body: unknown = await request.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new Error("Invalid registration body");
     }
+    input = body as Record<string, unknown>;
+  } catch {
+    return NextResponse.json(
+      {
+        success: false,
+        error: { message: "Data registrasi tidak valid." },
+      },
+      { status: 400 }
+    );
+  }
 
-    const store = getStore();
-    if (store.users.some((u) => u.username === username)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { message: "Username sudah terdaftar." },
+  const username =
+    typeof input.username === "string" ? input.username.trim() : "";
+  const password = typeof input.password === "string" ? input.password : "";
+  const role: Role = input.role === "dosen" ? "dosen" : "mahasiswa";
+
+  if (!username || !password) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: { message: "Username dan password wajib diisi." },
+      },
+      { status: 400 }
+    );
+  }
+  if (input.role === "admin") {
+    return NextResponse.json(
+      {
+        success: false,
+        error: { message: "Akun admin tidak dapat dibuat melalui registrasi." },
+      },
+      { status: 403 }
+    );
+  }
+  if (!isBlobStorageConfigured()) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          message:
+            "Penyimpanan akun belum tersedia. Hubungkan private Vercel Blob store ke project.",
         },
+      },
+      { status: 503 }
+    );
+  }
+
+  const store = getStore();
+  if (store.users.some((u) => u.username === username)) {
+    return NextResponse.json(
+      { success: false, error: { message: "Username sudah terdaftar." } },
+      { status: 409 }
+    );
+  }
+
+  const newUser = createUserRecord({
+    name: typeof input.name === "string" ? input.name.trim() : undefined,
+    username,
+    password,
+    role,
+  });
+
+  try {
+    if (!(await saveStoredUser(newUser))) {
+      return NextResponse.json(
+        { success: false, error: { message: "Username sudah terdaftar." } },
         { status: 409 }
       );
     }
 
-    const newUser = createUserRecord({
-      name: body.name?.trim(),
-      username,
-      password,
-      role,
-    });
     store.users.push(newUser);
-
     store.notifications.unshift({
       id: `ntf-${Date.now()}`,
       user_id: newUser.id,
@@ -53,19 +91,17 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      {
-        success: true,
-        data: { user: sanitizeUser(newUser) },
-      },
+      { success: true, data: { user: sanitizeUser(newUser) } },
       { status: 201 }
     );
-  } catch {
+  } catch (error) {
+    console.error("Gagal menyimpan akun ke Vercel Blob.", error);
     return NextResponse.json(
       {
         success: false,
-        error: { message: "Permintaan registrasi tidak valid." },
+        error: { message: "Gagal menyimpan akun. Silakan coba lagi." },
       },
-      { status: 400 }
+      { status: 500 }
     );
   }
 }

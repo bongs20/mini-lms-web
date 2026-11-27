@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
+import { isBlobStorageConfigured } from "@/lib/blob";
 import { getAuthUser, getStore } from "@/lib/store";
+import { listStoredSubmissions } from "@/lib/submissions";
+import {
+  listStoredAssignments,
+  listStoredCourses,
+  mergeCatalogRecords,
+} from "@/lib/catalog";
 
 export async function GET(
   request: Request,
@@ -13,10 +20,32 @@ export async function GET(
     );
   }
 
+  if (!isBlobStorageConfigured()) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          message:
+            "Penyimpanan Vercel Blob belum dikonfigurasi. Hubungkan Blob store privat ke project.",
+        },
+      },
+      { status: 503 }
+    );
+  }
+
   const { courseId } = await context.params;
   const store = getStore();
-  const course = store.courses.find((c) => c.id === courseId);
 
+  try {
+  const [storedCourses, storedAssignments, submissions] =
+    await Promise.all([
+      listStoredCourses(),
+      listStoredAssignments(),
+      listStoredSubmissions(),
+    ]);
+  const course = mergeCatalogRecords(store.courses, storedCourses).find(
+    (item) => item.id === courseId
+  );
   if (!course) {
     return NextResponse.json(
       { success: false, error: { message: "Mata kuliah tidak ditemukan." } },
@@ -24,18 +53,33 @@ export async function GET(
     );
   }
 
-  const assignments = store.assignments
+  const assignments = mergeCatalogRecords(
+    store.assignments,
+    storedAssignments
+  )
     .filter((a) => a.course_id === courseId)
     .map((a) => ({
       ...a,
-      submissions: store.submissions.filter(
+      submissions: submissions.filter(
         (s) =>
           s.assignment_id === a.id &&
-          (user.role === "dosen" || user.role === "admin" || s.user_id === user.id)
+          (user.role === "dosen" ||
+            user.role === "admin" ||
+            s.user_id === user.id)
       ),
     }));
   return NextResponse.json({
     success: true,
     data: { course, assignments },
   });
+  } catch (error) {
+  console.error("Gagal memuat pengumpulan tugas dari Vercel Blob.", error);
+  return NextResponse.json(
+    {
+      success: false,
+      error: { message: "Gagal memuat data pengumpulan dari Vercel Blob." },
+    },
+    { status: 500 }
+  );
+  }
 }

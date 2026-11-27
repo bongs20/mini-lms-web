@@ -26,6 +26,7 @@ export interface Submission {
   id: string;
   assignment_id: string;
   user_id: string;
+  user_name?: string;
   file_name: string;
   file_path: string;
   submitted_at?: string;
@@ -74,7 +75,7 @@ export async function apiFetch<T = unknown>(
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
-  if (body !== undefined) {
+  if (body !== undefined && !(body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -84,7 +85,12 @@ export async function apiFetch<T = unknown>(
   const res = await fetch(path, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body:
+      body === undefined
+        ? undefined
+        : body instanceof FormData
+          ? body
+          : JSON.stringify(body),
   });
 
   let payload: { success?: boolean; data?: T; error?: { message?: string } };

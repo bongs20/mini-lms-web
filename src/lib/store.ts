@@ -5,9 +5,9 @@ import type {
   NotificationItem,
   Role,
   ServiceHealth,
-  Submission,
   User,
 } from "./api";
+import { isBlobStorageConfigured } from "./blob";
 
 export interface StoredUser extends User {
   passwordHash: string;
@@ -17,7 +17,6 @@ interface StoreState {
   users: StoredUser[];
   courses: Course[];
   assignments: Assignment[];
-  submissions: Submission[];
   notifications: NotificationItem[];
 }
 
@@ -101,7 +100,6 @@ function createInitialState(): StoreState {
     users,
     courses,
     assignments,
-    submissions: [],
     notifications,
   };
 }
@@ -207,6 +205,10 @@ export function getServiceHealthList(): ServiceHealth[] {
     { name: "course-service (built-in)", status: "healthy", latency_ms: 3 },
     { name: "assignment-service (built-in)", status: "healthy", latency_ms: 2 },
     { name: "notification-service (built-in)", status: "healthy", latency_ms: 1 },
-    { name: "upload-storage (/tmp)", status: "healthy", latency_ms: 4 },
+    {
+      name: "persistent-storage (Vercel Blob)",
+      status: isBlobStorageConfigured() ? "healthy" : "unconfigured",
+      latency_ms: 4,
+    },
   ];
 }
